@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>מילימ</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon" />
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
     <style>
       /* סגנונות בסיסיים */
       html,
@@ -19,7 +20,7 @@
         direction: rtl;
       }
       .hidden {
-        display: none;
+        display: none !important;
       }
       .container {
         display: flex;
@@ -40,7 +41,7 @@
         align-items: center;
         justify-content: center;
         gap: 20px;
-        max-width: 96%; /* ניסיון להקטין את הכותרת */
+        max-width: 96%;
         margin: 0 auto;
       }
       .info-row {
@@ -180,17 +181,51 @@
       #solution-button.disabled {
         background-color: #d3b2b2;
       }
+      /* סגנונות אוברליים */
+      .overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        color: white;
+        font-size: 3em;
+        text-align: center;
+        pointer-events: none;
+      }
+      .overlay-content {
+        background-color: rgba(0, 0, 0, 0.9);
+        padding: 2rem;
+        border-radius: 15px;
+        border: 3px solid gold;
+      }
     </style>
   </head>
   <body>
-    <!-- האוברליי הוסרו לגמרי -->
     <div class="container">
       <header>
         <div class="header-row">
           <h1 id="game-title">מילימ</h1>
           <div class="timer">
-            <svg id="countdown-timer" width="70" height="70" viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="45" stroke-width="7" stroke="#ddd" fill="none"></circle>
+            <svg
+              id="countdown-timer"
+              width="70"
+              height="70"
+              viewBox="0 0 100 100"
+            >
+              <circle
+                cx="50"
+                cy="50"
+                r="45"
+                stroke-width="7"
+                stroke="#ddd"
+                fill="none"
+              ></circle>
               <circle
                 id="countdown-circle"
                 cx="50"
@@ -228,6 +263,9 @@
       <section class="grid">
         <div class="grid-container"></div>
       </section>
+      <section>
+        <div id="word-list"></div>
+      </section>
       <section class="controls">
         <button id="hint-button">
           חשיפת אות (<span class="small-text">5 נקו'</span>)
@@ -236,15 +274,17 @@
           חשיפת מילה (<span class="small-text">50 נקו'</span>)
         </button>
       </section>
-      <section>
-        <!-- האלמנט current-word הוסר, מאחר והפונקציונליות הקשורה בו הוסרה -->
-        <div id="word-list"></div>
-      </section>
       <div id="notification" class="notification hidden"></div>
     </div>
-    <!-- הסרת ספריית הקונפטי -->
+
+    <!-- אוברליים לסיום משחק -->
+    <div id="game-overlay" class="overlay hidden">
+      <div class="overlay-content">
+        <h2 id="overlay-text"></h2>
+      </div>
+    </div>
+
     <script>
-      // הגדרת משתנים גלובליים כולל isSelecting
       let score = 100,
         gameEnded = false,
         totalTime = 60,
@@ -266,11 +306,10 @@
         "שמחה",
       ];
 
-      // קאשינג של אלמנטים מה-DOM
+      // אלמנטים DOM
       const scoreEl = document.getElementById("score");
       const foundWordsEl = document.getElementById("found-words");
       const totalWordsEl = document.getElementById("total-words");
-      // currentWordEl הוסר, אין צורך לגשת אליו
       const wordListEl = document.getElementById("word-list");
       const notificationEl = document.getElementById("notification");
       const timeTextEl = document.getElementById("time-text");
@@ -278,6 +317,8 @@
       const hintButton = document.getElementById("hint-button");
       const solutionButton = document.getElementById("solution-button");
       const gridContainer = document.querySelector(".grid-container");
+      const overlay = document.getElementById("game-overlay");
+      const overlayText = document.getElementById("overlay-text");
 
       // פונקציות עזר
       function createEmptyGrid() {
@@ -295,18 +336,29 @@
         }
       }
 
-      function dfs(grid, word, index, row, col, prevDir, turnCount, maxTurns, path, visited) {
+      function dfs(
+        grid,
+        word,
+        index,
+        row,
+        col,
+        prevDir,
+        turnCount,
+        maxTurns,
+        path,
+        visited
+      ) {
         if (index === word.length - 1) return path;
         const moves = [
-          [0, 1],
-          [0, -1],
-          [1, 0],
-          [-1, 0],
+          [0, 1], // ימינה
+          [0, -1], // שמאלה
+          [1, 0], // מטה
+          [-1, 0], // מעלה
         ];
         shuffleArray(moves);
         for (const [dr, dc] of moves) {
           const newRow = row + dr,
-                newCol = col + dc;
+            newCol = col + dc;
           if (!inBounds(newRow, newCol)) continue;
           const key = newRow + "," + newCol;
           if (visited.has(key)) continue;
@@ -339,8 +391,17 @@
         return null;
       }
 
+      function normalizeWord(word) {
+        return word
+          .replace(/[ךםןףץ]/g, (letter) => {
+            return { ך: "כ", ם: "מ", ן: "נ", ף: "פ", ץ: "צ" }[letter];
+          })
+          .replace(/\s/g, "") // הסרת כל הרווחים
+          .toLowerCase();
+      }
+
       function findPathForWord(grid, word) {
-        const maxTurns = word.length < 3 ? 0 : [0, 1, 2][Math.floor(Math.random() * 3)];
+        const maxTurns = word.length <= 4 ? 1 : 2; // הגבלת פניות
         const positions = [];
         for (let i = 0; i < 8; i++) {
           for (let j = 0; j < 8; j++) {
@@ -351,20 +412,64 @@
         for (const [r, c] of positions) {
           if (grid[r][c] !== "" && grid[r][c] !== word[0]) continue;
           const visited = new Set([r + "," + c]);
-          const path = dfs(grid, word, 0, r, c, null, 0, maxTurns, [[r, c]], visited);
+          const path = dfs(
+            grid,
+            word,
+            0,
+            r,
+            c,
+            null,
+            0,
+            maxTurns,
+            [[r, c]],
+            visited
+          );
+          if (path) return path;
+        }
+        return null;
+      }
+
+      function findPathForWord(grid, word) {
+        const maxTurns = word.length <= 4 ? 2 : 3;
+        const positions = [];
+        for (let i = 0; i < 8; i++) {
+          for (let j = 0; j < 8; j++) {
+            positions.push([i, j]);
+          }
+        }
+        shuffleArray(positions);
+        for (const [r, c] of positions) {
+          if (grid[r][c] !== "" && grid[r][c] !== word[0]) continue;
+          const visited = new Set([r + "," + c]);
+          const path = dfs(
+            grid,
+            word,
+            0,
+            r,
+            c,
+            null,
+            0,
+            maxTurns,
+            [[r, c]],
+            visited
+          );
           if (path) return path;
         }
         return null;
       }
 
       function coordsToExcel(coords) {
-        return coords.map(([r, c]) => String.fromCharCode(65 + c) + (r + 1)).join(",");
+        return coords
+          .map(([r, c]) => String.fromCharCode(65 + c) + (r + 1))
+          .join(",");
       }
 
       function generateGrid() {
         const grid = createEmptyGrid();
         const placements = [];
-        const sortedWords = wordsList.slice().sort((a, b) => normalizeWord(b).length - normalizeWord(a).length);
+        const sortedWords = wordsList
+          .slice()
+          .sort((a, b) => normalizeWord(b).length - normalizeWord(a).length);
         for (const word of sortedWords) {
           let norm = normalizeWord(word);
           let path = findPathForWord(grid, norm);
@@ -383,7 +488,9 @@
         for (let i = 0; i < 8; i++) {
           for (let j = 0; j < 8; j++) {
             if (grid[i][j] === "") {
-              grid[i][j] = letters.charAt(Math.floor(Math.random() * letters.length));
+              grid[i][j] = letters.charAt(
+                Math.floor(Math.random() * letters.length)
+              );
             }
           }
         }
@@ -453,7 +560,8 @@
             timeTextEl.textContent = timeLeft;
           }
           const ratio = timeLeft / totalTime;
-          const color = ratio >= 0.5 ? "green" : ratio >= 0.25 ? "orange" : "red";
+          const color =
+            ratio >= 0.5 ? "green" : ratio >= 0.25 ? "orange" : "red";
           timeTextEl.style.fill = color;
           countdownCircle.style.stroke = color;
           timeLeft--;
@@ -465,10 +573,37 @@
         timeTextEl.textContent = totalTime;
       }
 
-      // במקרה של זמן שעבר ועדיין לא נמצאו כל המילים – מסיימים את המשחק
       function endGame() {
         gameEnded = true;
-        // ניתן להוסיף כאן טיפול אחר בסיום המשחק אם רצוי
+        clearInterval(timerInterval);
+
+        if (discoveredWords.length === excelWords.length) {
+          overlayText.textContent = "🎉 כל הכבוד! 🎉";
+          triggerConfetti();
+        } else {
+          overlayText.textContent = "⏳ נגמר הזמן...";
+        }
+
+        overlay.classList.remove("hidden");
+      }
+
+      function triggerConfetti() {
+        const count = 200;
+        const defaults = { origin: { y: 0.7 }, zIndex: 2000 };
+
+        function fire(particleRatio, opts) {
+          confetti(
+            Object.assign({}, defaults, opts, {
+              particleCount: Math.floor(count * particleRatio),
+            })
+          );
+        }
+
+        fire(0.25, { spread: 26, startVelocity: 55 });
+        fire(0.2, { spread: 60 });
+        fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
+        fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+        fire(0.1, { spread: 120, startVelocity: 45 });
       }
 
       function attachCellDragListeners() {
@@ -484,10 +619,13 @@
           cell.addEventListener("touchmove", (e) => {
             e.preventDefault();
             const touch = e.touches[0];
-            const target = document.elementFromPoint(touch.clientX, touch.clientY);
-            if (target && target.classList.contains("cell")) {
+            const target = document.elementFromPoint(
+              touch.clientX,
+              touch.clientY
+            );
+            if (target?.classList.contains("cell")) {
               cellMouseEnter({ currentTarget: target });
-              if ("vibrate" in navigator) navigator.vibrate(20);
+              if ("vibrate" in navigator) navigator.vibrate([20]);
             }
           });
         });
@@ -509,19 +647,34 @@
       }
 
       function cellMouseEnter(event) {
-        if (gameEnded || !isSelecting) return;
-        const cell = event.currentTarget;
-        if (selectedCells.includes(cell)) return;
-        const lastCell = selectedCells[selectedCells.length - 1];
-        if (isAdjacent(lastCell, cell)) {
-          selectedCells.push(cell);
-          cell.classList.add("selected");
-          currentWord += cell.textContent;
-          cell.dataset.originalColor = cell.style.backgroundColor;
-          cell.style.backgroundColor = "lightgray";
-        }
-      }
+    if (gameEnded || !isSelecting) return;
+    const cell = event.currentTarget;
+    
+    // בדיקת כפילויות
+    if (selectedCells.includes(cell)) return;
+    
+    const lastCell = selectedCells[selectedCells.length - 1];
+    
+    // וידוא צימודיות
+    if (!isAdjacent(lastCell, cell)) return;
 
+    // הוספת התא למופעלים
+    selectedCells.push(cell);
+    cell.classList.add("selected");
+    currentWord += cell.textContent;
+    cell.dataset.originalColor = cell.style.backgroundColor;
+    cell.style.backgroundColor = "lightgray";
+
+    // הפעלת רטט עם כל התנאים
+    if ("vibrate" in navigator) {
+        navigator.vibrate([20]); // רטט קצר של 20ms
+        
+        // הוספת הגנה מפני רטט מרובה
+        if (cell.dataset.vibrating) return;
+        cell.dataset.vibrating = true;
+        setTimeout(() => delete cell.dataset.vibrating, 50);
+    }
+}
       function cellMouseUp(event) {
         if (gameEnded || !isSelecting) return;
         isSelecting = false;
@@ -530,12 +683,13 @@
 
       function isAdjacent(cell1, cell2) {
         const row1 = parseInt(cell1.dataset.row, 10),
-              col1 = parseInt(cell1.dataset.col, 10),
-              row2 = parseInt(cell2.dataset.row, 10),
-              col2 = parseInt(cell2.dataset.col, 10);
+          col1 = parseInt(cell1.dataset.col, 10),
+          row2 = parseInt(cell2.dataset.row, 10),
+          col2 = parseInt(cell2.dataset.col, 10);
         return (
-          (row1 === row2 && Math.abs(col1 - col2) === 1) ||
-          (col1 === col2 && Math.abs(row1 - row2) === 1)
+          Math.abs(row1 - row2) <= 1 &&
+          Math.abs(col1 - col2) <= 1 &&
+          !(row1 === row2 && col1 === col2)
         );
       }
 
@@ -548,14 +702,17 @@
       function submitWord() {
         if (gameEnded) return;
         let isValid = false,
-            validWord = null;
+          validWord = null;
         const selectedCoordsOrder = selectedCells
           .map((cell) => {
-            const col = String.fromCharCode(65 + parseInt(cell.dataset.col, 10));
+            const col = String.fromCharCode(
+              65 + parseInt(cell.dataset.col, 10)
+            );
             const row = parseInt(cell.dataset.row, 10) + 1;
             return `${col}${row}`;
           })
           .join(",");
+
         excelWords.forEach((wordObj) => {
           const wordCoords = wordObj.קואורדינטות.split(",");
           const selectedCoordsArray = selectedCoordsOrder.split(",");
@@ -576,7 +733,8 @@
               const normalizedWord = normalizeWord(wordObj.מילה);
               if (
                 normalizedCurrent === normalizedWord ||
-                normalizedCurrent === normalizedWord.split("").reverse().join("")
+                normalizedCurrent ===
+                  normalizedWord.split("").reverse().join("")
               ) {
                 isValid = true;
                 validWord = wordObj.מילה;
@@ -584,7 +742,9 @@
             }
           }
         });
+
         if (isValid) {
+          // רטט לניחוש נכון
           if ("vibrate" in navigator) navigator.vibrate([100, 50, 150]);
           selectedCells.forEach((cell) => {
             cell.classList.remove("selected", "error");
@@ -597,22 +757,26 @@
             handleWordDiscovery(validWord);
           }
           if (discoveredWords.length === excelWords.length) {
-            if (timerInterval) clearInterval(timerInterval);
-            gameEnded = true;
-            // מצב ניצחון – כל המילים נמצאו, אין אוברליי
+            endGame();
           }
         } else {
+          // רטט לניחוש שגוי
+          if ("vibrate" in navigator) navigator.vibrate([200]);
           const errorCells = [...selectedCells];
           errorCells.forEach((cell) => {
             cell.classList.remove("selected");
             cell.classList.add("error");
             cell.style.backgroundColor = "red";
-            cell.dataset.originalColor = cell.classList.contains("found") ? "lightgreen" : "";
+            cell.dataset.originalColor = cell.classList.contains("found")
+              ? "lightgreen"
+              : "";
           });
           updateScore(-5);
           setTimeout(() => {
             errorCells.forEach((cell) => {
-              cell.style.backgroundColor = cell.classList.contains("found") ? "lightgreen" : cell.dataset.originalColor || "#fff";
+              cell.style.backgroundColor = cell.classList.contains("found")
+                ? "lightgreen"
+                : cell.dataset.originalColor || "#fff";
               cell.classList.remove("error");
             });
           }, 1000);
@@ -631,7 +795,10 @@
             const index = wordCoords.indexOf(coord);
             if (index === wordCoords.length - 1) return true;
             for (let i = 0; i < selectedCoords.length; i++) {
-              if (!visited.has(selectedCoords[i]) && isAdjacentCoords(coord, selectedCoords[i])) {
+              if (
+                !visited.has(selectedCoords[i]) &&
+                isAdjacentCoords(coord, selectedCoords[i])
+              ) {
                 if (selectedCoords[i] === wordCoords[index + 1]) {
                   stack.push(selectedCoords[i]);
                   visited.add(selectedCoords[i]);
@@ -699,21 +866,30 @@
           showNotification("אין לך מספיק נקודות להשתמש ברמז!");
           return;
         }
-        const undiscovered = excelWords.filter((word) => !discoveredWords.includes(word.מילה));
+        const undiscovered = excelWords.filter(
+          (word) => !discoveredWords.includes(word.מילה)
+        );
         if (!undiscovered.length) {
           showNotification("אין עוד מילים שלא גילית!");
           return;
         }
-        const randomWord = undiscovered[Math.floor(Math.random() * undiscovered.length)];
+        const randomWord =
+          undiscovered[Math.floor(Math.random() * undiscovered.length)];
         const hintCoords = randomWord.קואורדינטות.split(",")[0];
         const row = parseInt(hintCoords[1], 10) - 1;
         const col = parseInt(hintCoords.charCodeAt(0) - 65, 10);
-        const hintCell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+        const hintCell = document.querySelector(
+          `.cell[data-row="${row}"][data-col="${col}"]`
+        );
         if (hintCell) {
           hintCell.style.backgroundColor = "yellow";
           updateScore(-5);
           setTimeout(() => {
-            hintCell.style.backgroundColor = hintCell.classList.contains("found") ? "lightgreen" : hintCell.dataset.originalColor || "#fff";
+            hintCell.style.backgroundColor = hintCell.classList.contains(
+              "found"
+            )
+              ? "lightgreen"
+              : hintCell.dataset.originalColor || "#fff";
           }, 1000);
         }
       }
@@ -723,17 +899,22 @@
           showNotification("אין לך מספיק נקודות להשתמש בפתרון!");
           return;
         }
-        const undiscovered = excelWords.filter((word) => !discoveredWords.includes(word.מילה));
+        const undiscovered = excelWords.filter(
+          (word) => !discoveredWords.includes(word.מילה)
+        );
         if (!undiscovered.length) {
           showNotification("אין עוד מילים שלא גילית!");
           return;
         }
-        const randomWord = undiscovered[Math.floor(Math.random() * undiscovered.length)];
+        const randomWord =
+          undiscovered[Math.floor(Math.random() * undiscovered.length)];
         const solutionCoords = randomWord.קואורדינטות.split(",");
         solutionCoords.forEach((coord) => {
           const row = parseInt(coord[1], 10) - 1;
           const col = parseInt(coord.charCodeAt(0) - 65, 10);
-          const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+          const cell = document.querySelector(
+            `.cell[data-row="${row}"][data-col="${col}"]`
+          );
           if (cell) cell.style.backgroundColor = "yellow";
         });
         updateScore(-50);
@@ -741,9 +922,13 @@
           solutionCoords.forEach((coord) => {
             const row = parseInt(coord[1], 10) - 1;
             const col = parseInt(coord.charCodeAt(0) - 65, 10);
-            const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+            const cell = document.querySelector(
+              `.cell[data-row="${row}"][data-col="${col}"]`
+            );
             if (cell) {
-              cell.style.backgroundColor = cell.classList.contains("found") ? "lightgreen" : cell.dataset.originalColor || "#fff";
+              cell.style.backgroundColor = cell.classList.contains("found")
+                ? "lightgreen"
+                : cell.dataset.originalColor || "#fff";
             }
           });
         }, 2000);
@@ -766,11 +951,13 @@
       }
 
       function startGame() {
+        overlay.classList.add("hidden");
         generateGrid();
         generateLetterGridDiv();
         attachCellDragListeners();
         startTimer();
-        scoreEl.textContent = score;
+        score = 100;
+        discoveredWords = [];
         updateButtonsState();
         updateUI();
         updateWordListUI();
