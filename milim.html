@@ -21,25 +21,6 @@
       .hidden {
         display: none;
       }
-      /* סגנונות overlay */
-      .overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background-color: rgba(0, 0, 0, 0.7);
-        z-index: 9999;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-      }
-      .overlay-message {
-        color: #fff;
-        font-size: 3em;
-        font-weight: bold;
-        text-align: center;
-      }
       .container {
         display: flex;
         flex-direction: column;
@@ -59,7 +40,7 @@
         align-items: center;
         justify-content: center;
         gap: 20px;
-        max-width: 800px;
+        max-width: 96%; /* ניסיון להקטין את הכותרת */
         margin: 0 auto;
       }
       .info-row {
@@ -202,14 +183,7 @@
     </style>
   </head>
   <body>
-    <!-- האוברליי של מצב סיום -->
-    <div id="timeout-overlay" class="overlay hidden">
-      <div class="overlay-message">נגמר הזמן...</div>
-    </div>
-    <div id="win-overlay" class="overlay hidden">
-      <div class="overlay-message">כל הכבוד!</div>
-      <canvas id="confetti-canvas"></canvas>
-    </div>
+    <!-- האוברליי הוסרו לגמרי -->
     <div class="container">
       <header>
         <div class="header-row">
@@ -237,14 +211,17 @@
                 fill="green"
                 font-weight="bold"
                 style="transform: translateY(2px)"
-              >60</text>
+              >
+                60
+              </text>
             </svg>
           </div>
         </div>
         <div class="info-row">
           <div class="score">ניקוד: <span id="score">100</span></div>
           <div class="word-count">
-            מילים שנמצאו: <span id="found-words">0</span> מתוך <span id="total-words">0</span>
+            מילים: <span id="found-words">0</span> מתוך
+            <span id="total-words">0</span>
           </div>
         </div>
       </header>
@@ -253,20 +230,19 @@
       </section>
       <section class="controls">
         <button id="hint-button">
-          גילוי אות (<span class="small-text">5 נקו'</span>)
+          חשיפת אות (<span class="small-text">5 נקו'</span>)
         </button>
         <button id="solution-button">
-          גילוי מילה (<span class="small-text">50 נקו'</span>)
+          חשיפת מילה (<span class="small-text">50 נקו'</span>)
         </button>
       </section>
       <section>
-        <div id="current-word"></div>
+        <!-- האלמנט current-word הוסר, מאחר והפונקציונליות הקשורה בו הוסרה -->
         <div id="word-list"></div>
       </section>
       <div id="notification" class="notification hidden"></div>
     </div>
-    <!-- כולל ספריית קונפטי -->
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+    <!-- הסרת ספריית הקונפטי -->
     <script>
       // הגדרת משתנים גלובליים כולל isSelecting
       let score = 100,
@@ -294,7 +270,7 @@
       const scoreEl = document.getElementById("score");
       const foundWordsEl = document.getElementById("found-words");
       const totalWordsEl = document.getElementById("total-words");
-      const currentWordEl = document.getElementById("current-word");
+      // currentWordEl הוסר, אין צורך לגשת אליו
       const wordListEl = document.getElementById("word-list");
       const notificationEl = document.getElementById("notification");
       const timeTextEl = document.getElementById("time-text");
@@ -302,8 +278,6 @@
       const hintButton = document.getElementById("hint-button");
       const solutionButton = document.getElementById("solution-button");
       const gridContainer = document.querySelector(".grid-container");
-      const timeoutOverlay = document.getElementById("timeout-overlay");
-      const winOverlay = document.getElementById("win-overlay");
 
       // פונקציות עזר
       function createEmptyGrid() {
@@ -336,10 +310,15 @@
           if (!inBounds(newRow, newCol)) continue;
           const key = newRow + "," + newCol;
           if (visited.has(key)) continue;
-          if (grid[newRow][newCol] !== "" && grid[newRow][newCol] !== word[index + 1]) continue;
-          const newTurnCount = prevDir && (dr !== prevDir[0] || dc !== prevDir[1])
-            ? turnCount + 1
-            : turnCount;
+          if (
+            grid[newRow][newCol] !== "" &&
+            grid[newRow][newCol] !== word[index + 1]
+          )
+            continue;
+          const newTurnCount =
+            prevDir && (dr !== prevDir[0] || dc !== prevDir[1])
+              ? turnCount + 1
+              : turnCount;
           if (newTurnCount > maxTurns) continue;
           visited.add(key);
           const result = dfs(
@@ -486,21 +465,10 @@
         timeTextEl.textContent = totalTime;
       }
 
-      // במקרה של זמן שעבר ועדיין לא נמצאו כל המילים – מציגים overlay "נגמר הזמן..."
+      // במקרה של זמן שעבר ועדיין לא נמצאו כל המילים – מסיימים את המשחק
       function endGame() {
         gameEnded = true;
-        if (discoveredWords.length < excelWords.length) {
-          timeoutOverlay.classList.remove("hidden");
-        }
-      }
-
-      // הפעלת קונפטי – במצב ניצחון
-      function launchConfetti() {
-        confetti({ zIndex: 100000, particleCount: 120, spread: 120, angle: 60, origin: { x: 0, y: 0 } });
-        confetti({ zIndex: 100000, particleCount: 120, spread: 120, angle: 120, origin: { x: 1, y: 0 } });
-        confetti({ zIndex: 100000, particleCount: 120, spread: 120, angle: 240, origin: { x: 0, y: 1 } });
-        confetti({ zIndex: 100000, particleCount: 120, spread: 120, angle: 300, origin: { x: 1, y: 1 } });
-        confetti({ zIndex: 100000, particleCount: 150, spread: 150, origin: { x: 0.5, y: 0.5 } });
+        // ניתן להוסיף כאן טיפול אחר בסיום המשחק אם רצוי
       }
 
       function attachCellDragListeners() {
@@ -575,7 +543,6 @@
         scoreEl.textContent = score;
         foundWordsEl.textContent = discoveredWords.length;
         totalWordsEl.textContent = excelWords.length;
-        currentWordEl.textContent = "";
       }
 
       function submitWord() {
@@ -593,10 +560,18 @@
           const wordCoords = wordObj.קואורדינטות.split(",");
           const selectedCoordsArray = selectedCoordsOrder.split(",");
           if (wordCoords.length === selectedCoordsArray.length) {
-            const isForwardMatch = selectedCoordsArray.every((coord, index) => coord === wordCoords[index]);
-            const isReverseMatch = selectedCoordsArray.every((coord, index) => coord === wordCoords[wordCoords.length - 1 - index]);
+            const isForwardMatch = selectedCoordsArray.every(
+              (coord, index) => coord === wordCoords[index]
+            );
+            const isReverseMatch = selectedCoordsArray.every(
+              (coord, index) =>
+                coord === wordCoords[wordCoords.length - 1 - index]
+            );
             const isPathMatch = checkPathMatch(selectedCoordsArray, wordCoords);
-            if ((isForwardMatch || isReverseMatch || isPathMatch) && !discoveredWords.includes(wordObj.מילה)) {
+            if (
+              (isForwardMatch || isReverseMatch || isPathMatch) &&
+              !discoveredWords.includes(wordObj.מילה)
+            ) {
               const normalizedCurrent = normalizeWord(currentWord);
               const normalizedWord = normalizeWord(wordObj.מילה);
               if (
@@ -621,12 +596,10 @@
             currentWord = validWord;
             handleWordDiscovery(validWord);
           }
-          // מצב ניצחון – כל המילים נמצאו
           if (discoveredWords.length === excelWords.length) {
             if (timerInterval) clearInterval(timerInterval);
             gameEnded = true;
-            winOverlay.classList.remove("hidden");
-            launchConfetti();
+            // מצב ניצחון – כל המילים נמצאו, אין אוברליי
           }
         } else {
           const errorCells = [...selectedCells];
